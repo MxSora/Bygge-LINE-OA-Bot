@@ -29,27 +29,23 @@
   <div id="msg" class="msg">กำลังเปิดหน้าต่างแชร์...</div>
 
 <script>
-/* ============ EDIT THESE ============ */
-const LIFF_ID         = '2009974309-vOgf9wWh';                  // e.g. 1234567890-AbCdEfGh
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzOSujyDDKsr4j75dzmsxfW_-sZX_BK3ya6xLPZ_xSbv_dJKxhZTVqxb9YK7ytKO8pq/exec';     // ends with /exec
-const ADD_FRIEND_URL  = 'https://lin.ee/rhuQmXr';               // e.g. https://lin.ee/xxxxx
+/* ============= EDIT THESE ============= */
+const LIFF_ID         = '2009974309-vOgf9wWh';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxM4NyzYk8Rs9cjNxPAnTF_fuHjj1FE1QN-xuFx0w5gZ8BVTQ86PRanK5LThCoE32Vp-g/exec';
+const ADD_FRIEND_URL  = 'https://lin.ee/rhuQmXr';
 const SHOP_NAME       = 'Bygge Solutions';
-/* ==================================== */
+/* ===================================== */
 
 function getParam(k) {
   return new URLSearchParams(location.search).get(k);
 }
 
-function setMsg(text, cls) {
+function setMsg(text, type) {
   const el = document.getElementById('msg');
   el.textContent = text;
-  el.className = 'msg' + (cls ? ' ' + cls : '');
+  el.className = 'msg' + (type ? ' ' + type : '');
 }
-
-function hideSpinner() {
-  const s = document.getElementById('spinner');
-  if (s) s.style.display = 'none';
-}
+function hideSpinner() { document.getElementById('spinner').style.display = 'none'; }
 
 function buildShareFlex() {
   return {
@@ -87,24 +83,44 @@ async function pingMarkShare(uid) {
 }
 
 async function main() {
-  const uid = getParam('uid');
-  if (!uid) { hideSpinner(); setMsg('ไม่พบข้อมูลผู้ใช้', 'error'); return; }
-
   try {
     await liff.init({ liffId: LIFF_ID });
   } catch (e) {
-    hideSpinner(); setMsg('เปิด LIFF ไม่สำเร็จ: ' + (e.message || e), 'error');
+    hideSpinner();
+    setMsg('เปิด LIFF ไม่สำเร็จ: ' + (e.message || e), 'error');
+    return;
+  }
+
+  // Get uid from LIFF profile (preferred) with URL/liff.state fallback
+  let uid = null;
+  try {
+    if (liff.isLoggedIn()) {
+      const profile = await liff.getProfile();
+      uid = profile.userId;
+    }
+  } catch (_) {}
+  if (!uid) {
+    const p = new URLSearchParams(location.search);
+    uid = p.get('uid');
+    if (!uid && p.get('liff.state')) {
+      const stateRaw = p.get('liff.state').replace(/^\?/, '');
+      uid = new URLSearchParams(stateRaw).get('uid');
+    }
+  }
+  if (!uid) {
+    hideSpinner();
+    setMsg('ไม่พบข้อมูลผู้ใช้', 'error');
     return;
   }
 
   if (!liff.isApiAvailable('shareTargetPicker')) {
-    hideSpinner(); setMsg('อุปกรณ์นี้ไม่รองรับการแชร์ กรุณาแชร์ผ่านแอป LINE โดยตรง', 'error');
+    hideSpinner();
+    setMsg('อุปกรณ์นี้ไม่รองรับการแชร์ กรุณาแชร์ผ่านแอป LINE โดยตรง', 'error');
     return;
   }
 
   try {
     await liff.shareTargetPicker([ buildShareFlex() ]);
-    // Treat any non-throw as success (booth flow is honor system).
     await pingMarkShare(uid);
     hideSpinner();
     setMsg('เรียบร้อย! กลับไปที่ห้องแชทเพื่อรับ Mission Completed', 'success');
