@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lead Collection</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Thai", sans-serif;
+    margin: 0; padding: 16px; box-sizing: border-box;
+    color: #333; background: #fafafa;
+  }
+  h1 { font-size: 22px; color: #1DB446; margin: 0 0 12px; }
+  h2 { font-size: 16px; margin: 16px 0 8px; color: #444; }
+  .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  label.chk {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: #fff; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 14px; cursor: pointer;
+  }
+  label.chk input { margin: 0; }
+  input[type=text], input[type=tel], textarea {
+    width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px;
+    box-sizing: border-box; margin-bottom: 8px;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  button {
+    width: 100%; padding: 14px; font-size: 16px; font-weight: 600;
+    background: #1DB446; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+    margin-top: 16px;
+  }
+  button:disabled { background: #ccc; }
+  .msg { margin-top: 16px; font-size: 15px; text-align: center; }
+  .msg.ok { color: #06C755; font-weight: 600; }
+  .msg.err { color: #c00; }
+</style>
+</head>
+<body>
+
+<h1>Lead Collection</h1>
+<div id="form-area">
+
+<h2>ผลิตภัณฑ์ที่สนใจ</h2>
+<div class="product-grid" id="products">
+  <label class="chk"><input type="checkbox" value="BG-19L"> BG-19L</label>
+  <label class="chk"><input type="checkbox" value="BG-30"> BG-30</label>
+  <label class="chk"><input type="checkbox" value="SB"> SB</label>
+  <label class="chk"><input type="checkbox" value="MTP"> MTP</label>
+  <label class="chk"><input type="checkbox" value="Sponge"> Sponge</label>
+  <label class="chk"><input type="checkbox" value="GB-60L"> GB-60L</label>
+  <label class="chk"><input type="checkbox" value="BA50"> BA50</label>
+  <label class="chk"><input type="checkbox" value="BA100"> BA100</label>
+  <label class="chk"><input type="checkbox" value="BA500"> BA500</label>
+  <label class="chk"><input type="checkbox" value="BA1000"> BA1000</label>
+</div>
+
+<h2>ข้อมูลลูกค้า</h2>
+<input id="name" type="text" placeholder="ชื่อ" autocomplete="name">
+<input id="phone" type="tel" placeholder="เบอร์โทร" autocomplete="tel">
+<textarea id="notes" placeholder="หมายเหตุ"></textarea>
+
+<button id="submit">บันทึก</button>
+
+</div>
+
+<div id="msg" class="msg"></div>
+
+<script>
+const LIFF_ID         = '2009974309-KEwJqcje';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxM4NyzYk8Rs9cjNxPAnTF_fuHjj1FE1QN-xuFx0w5gZ8BVTQ86PRanK5LThCoE32Vp-g/exec';
+
+function setMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg' + (type ? ' ' + type : '');
+}
+
+async function init() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+  } catch (e) {
+    setMsg('เปิด LIFF ไม่สำเร็จ: ' + (e.message || e), 'err');
+    return;
+  }
+
+  let uid = null, byname = '';
+  try {
+    if (liff.isLoggedIn()) {
+      const profile = await liff.getProfile();
+      uid = profile.userId;
+      byname = profile.displayName || '';
+    }
+  } catch (_) {}
+  if (!uid) {
+    const p = new URLSearchParams(location.search);
+    uid = p.get('uid') || '';
+    if (!uid && p.get('liff.state')) {
+      const stateRaw = p.get('liff.state').replace(/^\?/, '');
+      uid = new URLSearchParams(stateRaw).get('uid') || '';
+    }
+  }
+
+  document.getElementById('submit').onclick = async () => {
+    const products = Array.from(document.querySelectorAll('#products input:checked')).map(i => i.value);
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const notes = document.getElementById('notes').value.trim();
+
+    if (!name && !phone && products.length === 0 && !notes) {
+      setMsg('กรุณากรอกข้อมูลอย่างน้อย 1 ช่อง', 'err');
+      return;
+    }
+
+    document.getElementById('submit').disabled = true;
+    setMsg('กำลังบันทึก...', '');
+
+    const params = new URLSearchParams();
+    params.set('act', 'lead');
+    params.set('uid', uid || '');
+    params.set('byname', byname);
+    params.set('name', name);
+    params.set('phone', phone);
+    params.set('products', products.join(','));
+    params.set('notes', notes);
+
+    try {
+      await fetch(APPS_SCRIPT_URL + '?' + params.toString(), { mode: 'no-cors' });
+      document.getElementById('form-area').style.display = 'none';
+      setMsg('บันทึกเรียบร้อย!', 'ok');
+      setTimeout(() => { if (liff.isInClient()) liff.closeWindow(); }, 1500);
+    } catch (e) {
+      setMsg('บันทึกไม่สำเร็จ: ' + (e.message || e), 'err');
+      document.getElementById('submit').disabled = false;
+    }
+  };
+}
+
+init();
+</script>
+</body>
+</html>
