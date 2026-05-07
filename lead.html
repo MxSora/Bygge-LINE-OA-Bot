@@ -38,7 +38,7 @@
 </head>
 <body>
 
-<h1>Lead Collection</h1>
+<h1 id="title">Lead Collection</h1>
 <div id="form-area">
 
 <h2>ผลิตภัณฑ์ที่สนใจ</h2>
@@ -76,12 +76,29 @@ function setMsg(text, type) {
   el.className = 'msg' + (type ? ' ' + type : '');
 }
 
+function readParam(k) {
+  const p = new URLSearchParams(location.search);
+  let v = p.get(k);
+  if (v) return v;
+  if (p.get('liff.state')) {
+    const stateRaw = p.get('liff.state').replace(/^\?/, '');
+    return new URLSearchParams(stateRaw).get(k);
+  }
+  return null;
+}
+
 async function init() {
   try {
     await liff.init({ liffId: LIFF_ID });
   } catch (e) {
     setMsg('เปิด LIFF ไม่สำเร็จ: ' + (e.message || e), 'err');
     return;
+  }
+
+  // Set page header with event title prefix (if passed via URL)
+  const etitle = readParam('etitle') || '';
+  if (etitle) {
+    document.getElementById('title').textContent = etitle + ' Lead Collection';
   }
 
   let uid = null, byname = '';
@@ -93,12 +110,7 @@ async function init() {
     }
   } catch (_) {}
   if (!uid) {
-    const p = new URLSearchParams(location.search);
-    uid = p.get('uid') || '';
-    if (!uid && p.get('liff.state')) {
-      const stateRaw = p.get('liff.state').replace(/^\?/, '');
-      uid = new URLSearchParams(stateRaw).get('uid') || '';
-    }
+    uid = readParam('uid') || '';
   }
 
   document.getElementById('submit').onclick = async () => {
