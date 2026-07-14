@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bygge Booth Admin</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Thai", sans-serif; margin: 0; padding: 12px; background: #f5f5f5; color: #222; }
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+h1 { font-size: 18px; margin: 0; color: #1DB446; }
+.status { font-size: 12px; color: #666; }
+#search { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box; }
+.user { background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid #eee; }
+.user .name { font-weight: 600; font-size: 14px; color: #111; }
+.user .meta { font-size: 11px; color: #999; margin: 4px 0 10px; font-family: monospace; word-break: break-all; }
+.buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.buttons button { padding: 10px 6px; border-radius: 6px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
+.b-sample { background: #E1F5EE; color: #0F6E56; }
+.b-discount { background: #FCEBEB; color: #A32D2D; }
+.buttons button:active { transform: scale(0.95); }
+.buttons button:disabled { opacity: 0.4; cursor: wait; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 12px 20px; border-radius: 24px; font-size: 14px; z-index: 999; max-width: 90%; text-align: center; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.err { color: #A32D2D; text-align: center; padding: 40px 20px; font-size: 14px; }
+.refresh { text-align: center; padding: 12px; color: #1DB446; font-size: 12px; cursor: pointer; user-select: none; }
+.empty { text-align: center; color: #999; padding: 40px 20px; font-size: 13px; }
+.badge { display: inline-block; background: #EAF3DE; color: #3B6D11; padding: 2px 8px; border-radius: 10px; font-size: 10px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Bygge Booth Admin</h1>
+  <div class="status" id="status">Loading...</div>
+</header>
+<input type="text" id="search" placeholder="ค้นหาชื่อ / Search name...">
+<div id="list"></div>
+<div class="refresh" onclick="load()">&#8635; Refresh</div>
+<div class="toast" id="toast"></div>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbxM4NyzYk8Rs9cjNxPAnTF_fuHjj1FE1QN-xuFx0w5gZ8BVTQ86PRanK5LThCoE32Vp-g/exec';
+const params = new URLSearchParams(location.search);
+const STAFF = params.get('staff') || '';
+const TEMPLATES = [
+  { id: 'SPONGE',  label: 'Sponge',  cls: 'b-sample' },
+  { id: 'SOIL',    label: 'Soil',    cls: 'b-sample' },
+  { id: 'CLEANER', label: 'Cleaner', cls: 'b-sample' },
+  { id: 'DC50',    label: '50฿',  cls: 'b-discount' },
+  { id: 'DC100',   label: '100฿', cls: 'b-discount' },
+  { id: 'DC200',   label: '200฿', cls: 'b-discount' }
+];
+let USERS = [];
+
+if (!STAFF) {
+  document.body.innerHTML = '<div class="err">Missing staff parameter.<br><br>Bookmark URL as:<br><code>admin.html?staff=YOUR_LINE_USER_ID</code><br><br>Get your userId by sending <b>/myid</b> to the OA.</div>';
+}
+
+async function load() {
+  document.getElementById('status').textContent = 'Loading...';
+  try {
+    const r = await fetch(API + '?act=recentusers&staff=' + encodeURIComponent(STAFF));
+    const j = await r.json();
+    if (!j.ok) {
+      document.getElementById('status').textContent = 'Error';
+      document.getElementById('list').innerHTML = '<div class="err">' + (j.err === 'auth' ? 'Not authorized. Add yourself to the admins sheet.' : ('Error: ' + j.err)) + '</div>';
+      return;
+    }
+    USERS = j.users || [];
+    render();
+    document.getElementById('status').textContent = USERS.length + ' users';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Network error';
+    document.getElementById('list').innerHTML = '<div class="err">Network error: ' + e.message + '</div>';
+  }
+}
+
+function render() {
+  const q = document.getElementById('search').value.toLowerCase().trim();
+  const filtered = q ? USERS.filter(u => (u.displayName || '').toLowerCase().includes(q) || u.userId.includes(q)) : USERS;
+  if (!filtered.length) {
+    document.getElementById('list').innerHTML = '<div class="empty">No users found</div>';
+    return;
+  }
+  const html = filtered.map(u => {
+    const badge = u.followedAt ? '<span class="badge">' + fmtTime(u.followedAt) + '</span>' : '';
+    return '<div class="user">' +
+      '<div class="name">' + escape(u.displayName || '(no name)') + badge + '</div>' +
+      '<div class="meta">' + escape(u.userId) + '</div>' +
+      '<div class="buttons">' +
+        TEMPLATES.map(t => '<button class="' + t.cls + '" data-uid="' + escape(u.userId) + '" data-tpl="' + t.id + '" data-name="' + escape(u.displayName || u.userId) + '">' + t.label + '</button>').join('') +
+      '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('list').innerHTML = html;
+  document.querySelectorAll('.buttons button').forEach(b => {
+    b.onclick = () => issue(b.dataset.uid, b.dataset.tpl, b.dataset.name, b);
+  });
+}
+
+async function issue(uid, tpl, name, btn) {
+  if (!confirm('Send ' + tpl + ' to ' + name + '?')) return;
+  const all = btn.parentElement.querySelectorAll('button');
+  all.forEach(b => b.disabled = true);
+  const original = btn.textContent;
+  btn.textContent = '...';
+  try {
+    const r = await fetch(API + '?act=issuereward&staff=' + encodeURIComponent(STAFF) + '&uid=' + encodeURIComponent(uid) + '&tpl=' + encodeURIComponent(tpl));
+    const j = await r.json();
+    if (j.ok) {
+      toast('✓ Sent ' + tpl + ' to ' + name + '\n' + j.code);
+      btn.textContent = '✓';
+      setTimeout(() => { btn.textContent = original; }, 2000);
+    } else {
+      toast('Failed: ' + (j.err || 'unknown'));
+      btn.textContent = original;
+    }
+  } catch (e) {
+    toast('Error: ' + e.message);
+    btn.textContent = original;
+  } finally {
+    setTimeout(() => all.forEach(b => b.disabled = false), 500);
+  }
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function fmtTime(v) {
+  if (!v) return '';
+  try {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+  } catch(e) { return ''; }
+}
+
+function escape(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+if (STAFF) {
+  document.getElementById('search').addEventListener('input', render);
+  load();
+  setInterval(load, 30000);
+}
+</script>
+</body>
+</html>
